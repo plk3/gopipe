@@ -36,11 +36,15 @@ func chainProcess[In, Mid, Out any](
 	}
 }
 
-func (p *Pipeline[In, Out]) Start(input <-chan In) ([]Out, []error) {
+func (p *Pipeline[In, Out]) Run(input <-chan In) (<-chan Out, <-chan error) {
 	if p.proc == nil {
 		panic("no process defined")
 	}
-	outputCh, errorCh := p.proc(input)
+	return p.proc(input)
+}
+
+func (p *Pipeline[In, Out]) Correct(input <-chan In) ([]Out, []error) {
+	outputCh, errorCh := p.Run(input)
 
 	var results []Out
 	var errors []error

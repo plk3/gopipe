@@ -37,7 +37,7 @@ func main() {
     }()
 
     // Start the pipeline
-    output, errors := pipeline.Start(inputCh)
+    output, errors := pipeline.Collect(inputCh)
 
     fmt.Println(output)
     fmt.Println(errors)
@@ -71,14 +71,13 @@ func squarerProcess(in <-chan int) (<-chan int, <-chan error) {
 ```
 
 ## API Documentation
-Types
-Process[In, Out any]
+### Process[In, Out any]
 ```go
 type Process[In, Out any] func(<-chan In) (<-chan Out, <-chan error)
 A processing stage that takes an input channel and returns output and error channels.
 ```
 
-Pipeline[In, Out any]
+### Pipeline[In, Out any]
 ```go
 type Pipeline[In, Out any] struct {
     // contains filtered or unexported fields
@@ -86,13 +85,13 @@ type Pipeline[In, Out any] struct {
 ```
 
 ## Functions
-New[In, Out any]
+### New[In, Out any]
 ```go
 func New[In, Out any](proc Process[In, Out]) *Pipeline[In, Out]
 // Creates a new pipeline with the initial processing stage.
 ```
 
-Attach[In, Mid, Out any]
+### Attach[In, Mid, Out any]
 ```go
 func Attach[In, Mid, Out any](
     prev *Pipeline[In, Mid],
@@ -102,8 +101,13 @@ func Attach[In, Mid, Out any](
 ```
 
 ## Methods
-(p *Pipeline[In, Out]) Start
+### (p *Pipeline[In, Out]) Run
 ```go
-func (p *Pipeline[In, Out]) Start(input <-chan In) ([]Out, []error)
+func (p *Pipeline[In, Out]) Run(input <-chan In) (<-Out, <-error)
+// Starts the pipeline with the given input channel, returning output and error channel.
+```
+### (p *Pipeline[In, Out]) Collect
+```go
+func (p *Pipeline[In, Out]) Collect(input <-chan In) ([]Out, []error)
 // Starts the pipeline with the given input channel, returning output and error slice.
 ```

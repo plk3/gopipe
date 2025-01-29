@@ -28,7 +28,7 @@ func TestBasicProcess(t *testing.T) {
 	}
 	close(input)
 
-	results, errors := p.Start(input)
+	results, errors := p.Correct(input)
 
 	if len(errors) != 0 {
 		t.Errorf("expected no errors, got %d", len(errors))
@@ -65,7 +65,7 @@ func TestProcessWithErrors(t *testing.T) {
 	}
 	close(input)
 
-	results, errors := p.Start(input)
+	results, errors := p.Correct(input)
 
 	expectedResults := []int{2, 6}
 	if !reflect.DeepEqual(results, expectedResults) {
@@ -113,7 +113,7 @@ func TestAttachPipelines(t *testing.T) {
 	}
 	close(input)
 
-	results, errors := p2.Start(input)
+	results, errors := p2.Correct(input)
 
 	if len(errors) != 0 {
 		t.Errorf("expected no errors, got %d", len(errors))
