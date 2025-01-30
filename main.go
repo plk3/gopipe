@@ -7,13 +7,23 @@ import (
 type Process[In, Out any] func(<-chan In) (<-chan Out, <-chan error)
 
 type Pipeline[In, Out any] struct {
-	proc Process[In, Out]
+	proc       Process[In, Out]
+	maxWorkers int
 }
 
 func New[In, Out any](proc Process[In, Out]) *Pipeline[In, Out] {
 	return &Pipeline[In, Out]{
-		proc: proc,
+		proc:       proc,
+		maxWorkers: 1,
 	}
+}
+
+func (p *Pipeline[In, Out]) SetMaxWorkers(n int) *Pipeline[In, Out] {
+	if n < 1 {
+		panic("max workers must be at least 1")
+	}
+	p.maxWorkers = n
+	return p
 }
 
 func Attach[In, Mid, Out any](
@@ -21,7 +31,8 @@ func Attach[In, Mid, Out any](
 	nextProc Process[Mid, Out],
 ) *Pipeline[In, Out] {
 	return &Pipeline[In, Out]{
-		proc: chainProcess(prev.proc, nextProc),
+		proc:       chainProcess(prev.proc, nextProc),
+		maxWorkers: prev.maxWorkers,
 	}
 }
 
@@ -32,7 +43,7 @@ func chainProcess[In, Mid, Out any](
 	return func(in <-chan In) (<-chan Out, <-chan error) {
 		midCh, errCh1 := prevProc(in)
 		outCh, errCh2 := nextProc(midCh)
-		return outCh, mergeErrors(errCh1, errCh2)
+		return outCh, funIn([]<-chan error{errCh1, errCh2})
 	}
 }
 
@@ -40,7 +51,25 @@ func (p *Pipeline[In, Out]) Run(input <-chan In) (<-chan Out, <-chan error) {
 	if p.proc == nil {
 		panic("no process defined")
 	}
-	return p.proc(input)
+
+	if p.maxWorkers <= 1 {
+		return p.proc(input)
+	}
+
+	fanOutChs := fanOut(input, p.maxWorkers)
+
+	var outChs []<-chan Out
+	var errChs []<-chan error
+	for _, ch := range fanOutChs {
+		out, err := p.proc(ch)
+		outChs = append(outChs, out)
+		errChs = append(errChs, err)
+	}
+
+	mergedOut := funIn(outChs)
+	mergedErr := funIn(errChs)
+
+	return mergedOut, mergedErr
 }
 
 func (p *Pipeline[In, Out]) Correct(input <-chan In) ([]Out, []error) {
@@ -71,19 +100,43 @@ func (p *Pipeline[In, Out]) Correct(input <-chan In) ([]Out, []error) {
 	return results, errors
 }
 
-func mergeErrors(chs ...<-chan error) <-chan error {
-	out := make(chan error)
+func fanOut[In any](in <-chan In, n int) []<-chan In {
+	chs := make([]chan In, n)
+	for i := range chs {
+		chs[i] = make(chan In)
+	}
+
+	go func() {
+		defer func() {
+			for _, ch := range chs {
+				close(ch)
+			}
+		}()
+
+		i := 0
+		for v := range in {
+			chs[i] <- v
+			i = (i + 1) % n
+		}
+	}()
+
+	outChs := make([]<-chan In, n)
+	for i, ch := range chs {
+		outChs[i] = ch
+	}
+	return outChs
+}
+
+func funIn[Out any](chs []<-chan Out) <-chan Out {
+	out := make(chan Out)
 	var wg sync.WaitGroup
 
 	for _, ch := range chs {
-		if ch == nil {
-			continue
-		}
 		wg.Add(1)
-		go func(c <-chan error) {
+		go func(c <-chan Out) {
 			defer wg.Done()
-			for err := range c {
-				out <- err
+			for v := range c {
+				out <- v
 			}
 		}(ch)
 	}

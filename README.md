@@ -19,13 +19,14 @@ package main
 
 import (
 	"fmt"
+    "runtime"
 	"github.com/plk3/gopipe"
 )
 
 func main() {
     // Create a pipeline that multiplies numbers and then squares them
     multiplier := gopipe.New(multiplierProcess)
-    pipeline := gopipe.Attach(multiplier, squarerProcess)
+    pipeline := gopipe.Attach(multiplier, squarerProcess).SetMaxWorkers(runtime.NumCPU())
 
     // Create input channel
     inputCh := make(chan int)
