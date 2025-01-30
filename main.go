@@ -72,7 +72,7 @@ func (p *Pipeline[In, Out]) Run(input <-chan In) (<-chan Out, <-chan error) {
 	return mergedOut, mergedErr
 }
 
-func (p *Pipeline[In, Out]) Correct(input <-chan In) ([]Out, []error) {
+func (p *Pipeline[In, Out]) Collect(input <-chan In) ([]Out, []error) {
 	outputCh, errorCh := p.Run(input)
 
 	var results []Out

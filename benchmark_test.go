@@ -52,6 +52,6 @@ func BenchmarkParallelHeavyTask(b *testing.B) {
 				input <- j
 			}
 		}()
-		p.Correct(input)
+		p.Collect(input)
 	}
 }

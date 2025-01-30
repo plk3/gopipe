@@ -1,12 +1,15 @@
 # gopipe
-gopipe is a Go library for building concurrent data processing pipelines with automatic error aggregation. It allows you to chain processing stages together while handling concurrency and error propagation seamlessly.
+gopipe is a Go library for building concurrent data processing pipelines with automatic error aggregation. It enables easy composition of pipeline stages while handling concurrency and error propagation.
 
 ## Features
-- Concurrent pipeline processing
+- **Concurrent pipeline processing**
+- Configurable maximum workers per stage
+- Non-deterministic output order (when using multiple workers)
 - Automatic error aggregation from all stages
 - Type-safe generics for input/output types
-- Simple API for building complex pipelines
+- Simple API for complex pipeline construction
 - Composable pipeline stages
+- Safe channel closure management
 
 ## Installation
 ```bash
@@ -24,7 +27,6 @@ import (
 )
 
 func main() {
-    // Create a pipeline that multiplies numbers and then squares them
     multiplier := gopipe.New(multiplierProcess)
     pipeline := gopipe.Attach(multiplier, squarerProcess).SetMaxWorkers(runtime.NumCPU())
 
@@ -40,7 +42,7 @@ func main() {
     // Start the pipeline
     output, errors := pipeline.Collect(inputCh)
 
-    fmt.Println(output)
+    fmt.Println(output) // Example: [4 16 36 64 100] (order may vary)
     fmt.Println(errors)
 }
 
