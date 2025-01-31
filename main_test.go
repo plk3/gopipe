@@ -1,9 +1,11 @@
 package gopipe
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"testing"
+	"time"
 )
 
 func TestBasicProcess(t *testing.T) {
@@ -224,4 +226,93 @@ func TestOrderPreservation(t *testing.T) {
 	if !reflect.DeepEqual(results, numbers) {
 		t.Errorf("expected %v, got %v", numbers, results)
 	}
+}
+
+func TestBatchProcess(t *testing.T) {
+	t.Run("split batch", func(t *testing.T) {
+		input := make(chan int)
+		batchSize := 3
+
+		go func() {
+			defer close(input)
+			for i := 1; i <= 7; i++ {
+				input <- i
+			}
+		}()
+
+		outCh, _ := BatchProcess[int](batchSize)(input)
+		results := collectBatches(outCh)
+
+		expected := [][]int{
+			{1, 2, 3},
+			{4, 5, 6},
+			{7},
+		}
+
+		if !reflect.DeepEqual(results, expected) {
+			t.Errorf("Expected %v, got %v", expected, results)
+		}
+	})
+
+	t.Run("blank", func(t *testing.T) {
+		input := make(chan int)
+		close(input)
+
+		outCh, _ := BatchProcess[int](2)(input)
+		results := collectBatches(outCh)
+
+		if len(results) != 0 {
+			t.Errorf("Expected empty result, got %v", results)
+		}
+	})
+
+	t.Run("batch size", func(t *testing.T) {
+		input := make(chan int)
+		go func() {
+			defer close(input)
+			input <- 1
+			input <- 2
+		}()
+
+		outCh, _ := BatchProcess[int](1)(input)
+		results := collectBatches(outCh)
+
+		expected := [][]int{{1}, {2}}
+		if !reflect.DeepEqual(results, expected) {
+			t.Errorf("Expected %v, got %v", expected, results)
+		}
+	})
+
+	t.Run("error cascade", func(t *testing.T) {
+		errProc := func(in <-chan int) (<-chan int, <-chan error) {
+			out := make(chan int)
+			errCh := make(chan error, 1)
+			go func() {
+				defer close(out)
+				defer close(errCh)
+				errCh <- errors.New("test error")
+			}()
+			return out, errCh
+		}
+
+		pipeline := WithBatch(New(errProc), 2)
+		_, errCh := pipeline.Run(make(chan int))
+
+		select {
+		case err := <-errCh:
+			if err.Error() != "test error" {
+				t.Errorf("Expected 'test error', got %v", err)
+			}
+		case <-time.After(1 * time.Second):
+			t.Error("Error not received")
+		}
+	})
+}
+
+func collectBatches[T any](ch <-chan []T) [][]T {
+	var batches [][]T
+	for batch := range ch {
+		batches = append(batches, batch)
+	}
+	return batches
 }

@@ -18,14 +18,6 @@ func New[In, Out any](proc Process[In, Out]) *Pipeline[In, Out] {
 	}
 }
 
-func (p *Pipeline[In, Out]) SetMaxWorkers(n int) *Pipeline[In, Out] {
-	if n < 1 {
-		panic("max workers must be at least 1")
-	}
-	p.maxWorkers = n
-	return p
-}
-
 func Attach[In, Mid, Out any](
 	prev *Pipeline[In, Mid],
 	nextProc Process[Mid, Out],
@@ -43,8 +35,16 @@ func chainProcess[In, Mid, Out any](
 	return func(in <-chan In) (<-chan Out, <-chan error) {
 		midCh, errCh1 := prevProc(in)
 		outCh, errCh2 := nextProc(midCh)
-		return outCh, funIn([]<-chan error{errCh1, errCh2})
+		return outCh, fanIn([]<-chan error{errCh1, errCh2})
 	}
+}
+
+func (p *Pipeline[In, Out]) SetMaxWorkers(n int) *Pipeline[In, Out] {
+	if n < 1 {
+		panic("max workers must be at least 1")
+	}
+	p.maxWorkers = n
+	return p
 }
 
 func (p *Pipeline[In, Out]) Run(input <-chan In) (<-chan Out, <-chan error) {
@@ -66,8 +66,8 @@ func (p *Pipeline[In, Out]) Run(input <-chan In) (<-chan Out, <-chan error) {
 		errChs = append(errChs, err)
 	}
 
-	mergedOut := funIn(outChs)
-	mergedErr := funIn(errChs)
+	mergedOut := fanIn(outChs)
+	mergedErr := fanIn(errChs)
 
 	return mergedOut, mergedErr
 }
@@ -127,7 +127,7 @@ func fanOut[In any](in <-chan In, n int) []<-chan In {
 	return outChs
 }
 
-func funIn[Out any](chs []<-chan Out) <-chan Out {
+func fanIn[Out any](chs []<-chan Out) <-chan Out {
 	out := make(chan Out)
 	var wg sync.WaitGroup
 
@@ -147,4 +147,41 @@ func funIn[Out any](chs []<-chan Out) <-chan Out {
 	}()
 
 	return out
+}
+
+func BatchProcess[In any](batchSize int) Process[In, []In] {
+	return func(in <-chan In) (<-chan []In, <-chan error) {
+		out := make(chan []In)
+		errCh := make(chan error, 1)
+
+		go func() {
+			defer close(out)
+			defer close(errCh)
+
+			var batch []In
+			for item := range in {
+				batch = append(batch, item)
+				if len(batch) >= batchSize {
+					out <- batch
+					batch = nil
+				}
+			}
+
+			if len(batch) > 0 {
+				out <- batch
+			}
+		}()
+
+		return out, errCh
+	}
+}
+
+func WithBatch[In, Out any](
+	p *Pipeline[In, Out],
+	batchSize int,
+) *Pipeline[In, []Out] {
+	batchProc := func(in <-chan Out) (<-chan []Out, <-chan error) {
+		return BatchProcess[Out](batchSize)(in)
+	}
+	return Attach(p, batchProc)
 }

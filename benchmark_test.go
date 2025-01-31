@@ -6,11 +6,11 @@ import (
 	"testing"
 )
 
-var numElements = 100
+var numElements = 1000000
 
 func heavyTask(x int) float64 {
 	result := math.Sqrt(math.Pow(float64(x), 3.5)) * math.Sin(float64(x))
-	for i := 0; i < 1000000; i++ {
+	for i := 0; i < 1000; i++ {
 		result += math.Pow(math.Sin(float64(i)), 2) * math.Cos(float64(i))
 	}
 
@@ -42,6 +42,35 @@ func BenchmarkParallelHeavyTask(b *testing.B) {
 	}
 
 	p := New(proc).SetMaxWorkers(runtime.NumCPU())
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		input := make(chan int)
+		go func() {
+			defer close(input)
+			for j := 0; j < numElements; j++ {
+				input <- j
+			}
+		}()
+		p.Collect(input)
+	}
+}
+
+func BenchmarkParallelBatchHeavyTask(b *testing.B) {
+	proc := func(in <-chan int) (<-chan float64, <-chan error) {
+		outCh := make(chan float64)
+		errCh := make(chan error)
+		go func() {
+			defer close(outCh)
+			defer close(errCh)
+			for v := range in {
+				outCh <- heavyTask(v)
+			}
+		}()
+		return outCh, errCh
+	}
+
+	p := WithBatch(New(proc).SetMaxWorkers(runtime.NumCPU()), numElements/10)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

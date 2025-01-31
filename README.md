@@ -88,13 +88,13 @@ type Pipeline[In, Out any] struct {
 ```
 
 ## Functions
-### New[In, Out any]
+### New
 ```go
 func New[In, Out any](proc Process[In, Out]) *Pipeline[In, Out]
 // Creates a new pipeline with the initial processing stage.
 ```
 
-### Attach[In, Mid, Out any]
+### Attach
 ```go
 func Attach[In, Mid, Out any](
     prev *Pipeline[In, Mid],
@@ -103,14 +103,24 @@ func Attach[In, Mid, Out any](
 // Attaches a new processing stage to an existing pipeline.
 ```
 
+### WithBatch
+```go
+func WithBatch[In, Out any](
+	p *Pipeline[In, Out],
+	batchSize int,
+) *Pipeline[In, []Out] 
+```
+
 ## Methods
 ### (p *Pipeline[In, Out]) Run
 ```go
 func (p *Pipeline[In, Out]) Run(input <-chan In) (<-Out, <-error)
-// Starts the pipeline with the given input channel, returning output and error channel.
 ```
 ### (p *Pipeline[In, Out]) Collect
 ```go
 func (p *Pipeline[In, Out]) Collect(input <-chan In) ([]Out, []error)
-// Starts the pipeline with the given input channel, returning output and error slice.
+```
+### (p *Pipeline[In, Out]) SetMaxWorkers
+```go
+func (p *Pipeline[In, Out]) SetMaxWorkers(n int) *Pipeline[In, Out] 
 ```
